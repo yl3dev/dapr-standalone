@@ -1,0 +1,53 @@
+services:
+  orders:
+    image: order-processor:latest
+    container_name: orders
+    # The app listens on 7001 internally
+    ports:
+      - "7001:7001"
+    networks:
+      - dapr-network
+
+  orders-dapr:
+    image: "daprio/daprd:latest"
+    container_name: orders-dapr
+    command: [
+      "./daprd",
+      "--app-id", "orders",
+      "--app-port", "7001",
+      "--dapr-http-port", "3500",
+      "--dapr-grpc-port", "50001"
+    ]
+    # Make sure it's in the same network as 'orders'
+    networks:
+      - dapr-network
+    depends_on:
+      - orders
+   
+  payments:
+    image: payment-processor:latest
+    container_name: payments
+    # Suppose the app listens on 7002
+    ports:
+      - "7002:7002"
+    networks:
+      - dapr-network
+
+  payments-dapr:
+    image: "daprio/daprd:latest"
+    container_name: payments-dapr
+    command: [
+      "./daprd",
+      "--app-id", "payments",
+      "--app-port", "7002",
+      "--dapr-http-port", "3501",
+      "--dapr-grpc-port", "50002"
+    ]
+    networks:
+      - dapr-network
+    depends_on:
+      - payments 
+   
+networks:
+  dapr-network:
+    driver: bridge
