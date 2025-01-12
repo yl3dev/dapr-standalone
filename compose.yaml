@@ -1,29 +1,41 @@
+version: '3.8'
+
 services:
+  #################################################################
+  # ORDERS SERVICE + SIDECAR
+  #################################################################
   orders:
     image: order-processor:latest
     container_name: orders
     # The app listens on 7001 internally
+    # Publish it to the host for debugging if desired
     ports:
       - "7001:7001"
     networks:
       - dapr-network
+    # If 'orders' needs to call a sidecar itself, you could set
+    # DAPR_HTTP_ENDPOINT / DAPR_GRPC_ENDPOINT here too.
+    # For a simple server scenario, it may not be needed.
 
   orders-dapr:
-    image: "daprio/daprd:latest"
+    image: "daprio/daprd:1.14.4"
     container_name: orders-dapr
     command: [
       "./daprd",
       "--app-id", "orders",
       "--app-port", "7001",
+      "--app-channel-address", "orders",
       "--dapr-http-port", "3500",
       "--dapr-grpc-port", "50001"
     ]
-    # Make sure it's in the same network as 'orders'
-    networks:
-      - dapr-network
     depends_on:
       - orders
-   
+    networks:
+      - dapr-network
+
+  #################################################################
+  # PAYMENTS SERVICE + SIDECAR
+  #################################################################
   payments:
     image: payment-processor:latest
     container_name: payments
@@ -32,22 +44,28 @@ services:
       - "7002:7002"
     networks:
       - dapr-network
+    # IMPORTANT: these environment variables tell the .NET DaprClient
+    # to talk to "payments-dapr:3501" instead of localhost:3500.
+    environment:
+      - DAPR_HTTP_ENDPOINT=http://payments-dapr:3501
+      - DAPR_GRPC_ENDPOINT=http://payments-dapr:50002
 
   payments-dapr:
-    image: "daprio/daprd:latest"
+    image: "daprio/daprd:1.14.4"
     container_name: payments-dapr
     command: [
       "./daprd",
       "--app-id", "payments",
       "--app-port", "7002",
+      "--app-channel-address", "payments",
       "--dapr-http-port", "3501",
       "--dapr-grpc-port", "50002"
     ]
+    depends_on:
+      - payments
     networks:
       - dapr-network
-    depends_on:
-      - payments 
-   
+
 networks:
   dapr-network:
     driver: bridge
